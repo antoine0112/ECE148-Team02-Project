@@ -21,11 +21,10 @@ steering_pub = rospy.Publisher(STEERING_TOPIC_NAME, Float32, queue_size=10)
 rate = rospy.Rate(20) # 20Hz
 while not rospy.is_shutdown():
     throttle_msg = Float32()
-    throttle_msg.data = np.sin(time.time())
+    throttle_msg.data = 0.5* np.sin(time.time()) + 0.5
     
     steering_msg = Float32()
-    steering_msg.data = np.cos(time.time())
-
+    steering_msg.data = 0.5* np.cos(time.time()) + 0.5
     
     throttle_pub.publish(throttle_msg)
     steering_pub.publish(steering_msg)

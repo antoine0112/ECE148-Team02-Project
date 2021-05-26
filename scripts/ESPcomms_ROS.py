@@ -12,10 +12,9 @@ import random
 NODE_NAME = 'ESPcomms_ROS'
 STEERING_TOPIC_NAME = '/steering'
 THROTTLE_TOPIC_NAME = '/throttle'
-serialPort = "/dev/ttyACM0"
-# serialPort = "/dev/ttyS7"
-# serialBaud = 115200
-serialBaud = 9600
+serialPort = "/dev/ttyUSB0"
+serialBaud = 115200
+# serialBaud = 9600
 
 # Serial settings
 ser  = serial.Serial(serialPort, baudrate= serialBaud, 
@@ -51,9 +50,9 @@ def fillJSON():
     data = {}
     data["throttle"] = normalized_throttle
     data["steering"] = normalized_steering
-    data["heartbeat"] = round(time.time(),0)
+    # data["heartbeat"] = round(time.time(),0)
     data2=json.dumps(data)
-    print("data2",data2)
+    # print("data2",data2)
     return data2 
 
     # return json.dumps({'throttle': normalized_throttle, 'steering': normalized_steering,'heartbeat':round(time.time(),0)})
@@ -67,24 +66,27 @@ def sendJSON():
     
     if ser.isOpen():
             print("sending JSON!")
-            data = "testMsg\n"
-            print(data.encode('ascii'))
+            data = data + " \n"
+            ser.write(data.encode("ascii"))
+            
+            # data = "testMsg\n"
+            print("encodedJSON = ", data.encode("ascii"))
             # print(fillJSON().encode('ascii'))
             # print(fillJSON().encode('utf-8'))
             # ser.write(fillJSON().encode('utf-8'))
-            print("writtn", ser.write(data.encode('ascii')))
+            # print("writtn", ser.write(data.encode('ascii')))
             print('done sending')
             # print("debug sent ", ser.read(8))
             # print('done reqding')
             # print(ser.readline().decode("ascii"))
-            # ser.flush()
+            ser.flush()
             try:
                 print("entered the try incoming")
                 
                 dt = ser.readline()
-                print("debug", dt)
-                incoming = dt.decode("utf-8")
-                print ("decodedMsg",incoming)    #what supposed to happen
+                # print("debug", dt)
+                incoming = dt.decode("ascii")
+                print ("decodedMsg = ",incoming)    #what supposed to happen
             except Exception as e:
                 print ('err', e)
                 pass
@@ -103,9 +105,10 @@ def main():
     # send the heartbeat at 20Hz
     rate = rospy.Rate(10) # 20Hz
     print("entering while loop")
-    sendJSON()
+    
     while not rospy.is_shutdown():
         rate.sleep()
+        sendJSON()
 
     ser.close()
     print("killing serial")
