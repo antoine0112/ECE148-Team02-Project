@@ -3,11 +3,14 @@
 #include <esp_int_wdt.h>
 #include <esp_task_wdt.h>
 
+//3 seconds WDT
+#define WDT_TIMEOUT 3
+
 int mostRecentHrtbt = 0;
 int timeout = 500; // millis
 
 int direction_pin = 0;
-int pwm_pin = 2;
+int pwm_pin = 4;
 
 //for home testing
 int servoPin = direction_pin;
@@ -24,15 +27,13 @@ int steering_PWMiddle = (steering_PWMright - steering_PWMleft) / 2;
 
 void setup() {
   Serial.begin(115200); 
-  esp_int_wdt_init();
-  esp_task_wdt_init(3, true);
-//   wait for serial to start up
-  while(!Serial) {
-  }
+  esp_task_wdt_init(WDT_TIMEOUT, true); //enable panic so ESP32 restarts
+  esp_task_wdt_add(NULL); //add current thread to WDT watch
 
-  // pinMode(direction_pin, OUTPUT);           // Set the direction pin output
-  // pinMode(pwm_pin, OUTPUT);                 // Set the pwm pin output
 
+// //   wait for serial to start up
+// while(!Serial) {
+// }
 
   pinMode(escPin, OUTPUT);
   ledcSetup(throttle_chn, 5000, 8);
@@ -46,8 +47,8 @@ void setup() {
 void pwm(float normalized_throttle,float normalized_steering){
   // pwm = normalized throttle(-1 to 1) * (pwmMax - pwm min) 
   
-  int throttle_pwm = int(normalized_throttle*(throttle_PWMmax-throttle_PWMmin));
-  int steering_pwm = int(normalized_steering*(steering_PWMright-steering_PWMleft));
+  int throttle_pwm = int(normalized_throttle*(throttle_PWMmax-throttle_PWMmin)/2 + (throttle_PWMmax+throttle_PWMmin)/2);
+  int steering_pwm = int(normalized_steering*(steering_PWMright-steering_PWMleft)/2 + (steering_PWMright+steering_PWMleft)/2);
   Serial.print("steering_pwm=");
   Serial.print(steering_pwm);
   Serial.print(" throttle_pwm=");
@@ -67,7 +68,7 @@ void breakSubRoutine() {
 
 void loop() {
   String  payload;
-  esp_task_wdt_add(NULL);
+  // esp_task_wdt_add(NULL);
   unsigned long begin = millis();
   unsigned long end = millis();
 
@@ -95,5 +96,5 @@ void loop() {
   float normalized_steering = doc["steering"];
   pwm(normalized_throttle,normalized_steering);
 
-  delay(20);
+  delay(10);
 }

@@ -1,0 +1,3 @@
+<launch>
+    <node name="ESPcomms_ROS" pkg="ECE148-Team02-Project" type="ESPcomms_ROS.py" output="screen"/>
+</launch>

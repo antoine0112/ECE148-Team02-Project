@@ -44,7 +44,7 @@ void pwm(float normalized_throttle,float normalized_steering){
   // digitalWrite(direction_pin, steering_pwm);   // Set the motor in motion
   digitalWrite(direction_pin, 0);   // Set the motor in motion
   analogWrite(pwm_pin, throttle_pwm);              // Set the motor in motion
-  Serial.print("ABCsteering_pwm=\n");
+  Serial.print("ABCsteering_pwm=\r\n");
   // Serial.print(steering_pwm);
   // Serial.print("DEFthrottle_pwm=");
   // Serial.println(throttle_pwm);
