@@ -11,6 +11,7 @@ int mostRecentHrtbt = 0;
 int timeout = 500; // millis
 
 //for home testing
+Servo pwmThrottle;
 int servoPin = 0;
 int escPin = 4;
 
@@ -52,7 +53,7 @@ void initIO() {
   delay(1000);
   pinMode(escPin, OUTPUT);
   pwmThrottle.attach(escPin);
-  pwmThrottle.writeMicroseconds(stop_throt);
+  pwmThrottle.writeMicroseconds(idle_throt);
   delay(1000);
 }
 
@@ -76,8 +77,8 @@ void pwm(float normalized_throttle,float normalized_steering){
 void breakSubRoutine() {
   Serial.print("Enterning backup routine");
   while (1) {
-    ledcWrite(throttle_chn, throttle_PWMmin);
-    ledcWrite(steering_chn, steering_PWMiddle);
+    pwmThrottle.writeMicroseconds(idle_throt);
+    ledcWrite(steering_chn, mid);
   }
 }
 
