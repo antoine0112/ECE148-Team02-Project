@@ -2,6 +2,7 @@
 #include <math.h>
 #include <esp_int_wdt.h>
 #include <esp_task_wdt.h>
+#include <ESP32Servo.h>
 
 //3 seconds WDT
 #define WDT_TIMEOUT 3
@@ -9,23 +10,24 @@
 int mostRecentHrtbt = 0;
 int timeout = 500; // millis
 
-int direction_pin = 0;
-int pwm_pin = 4;
-
 //for home testing
-int servoPin = direction_pin;
-int escPin = pwm_pin;
+int servoPin = 0;
+int escPin = 4;
 
 int steering_chn = 3;
-int throttle_chn = 4;
 
-int throttle_PWMmax = 255;
-int throttle_PWMmin = 0;
-int steering_PWMright = 255;
-int steering_PWMleft = 0;
-int steering_PWMiddle = (steering_PWMright - steering_PWMleft) / 2;
+//throttle
+int idle_throt = 1500;
+int brake_throt = 1000;
+int max_throt = 2000;
+
+// Steering
+int left = 84;
+int mid = 116;
+int right = 148;
 
 void setup() {
+  initIO(); // Initialize throttle
   Serial.begin(115200); 
   esp_task_wdt_init(WDT_TIMEOUT, true); //enable panic so ESP32 restarts
   esp_task_wdt_add(NULL); //add current thread to WDT watch
@@ -35,27 +37,40 @@ void setup() {
 // while(!Serial) {
 // }
 
-  pinMode(escPin, OUTPUT);
-  ledcSetup(throttle_chn, 5000, 8);
-  ledcAttachPin(escPin, throttle_chn);
-
   pinMode(servoPin, OUTPUT);
-  ledcSetup(steering_chn, 5000, 8);
+  ledcSetup(steering_chn, 300, 8);
   ledcAttachPin(servoPin, steering_chn);
+  ledcWrite(steering_chn, mid);
+
+  // Delay to calibrate ESC
+  Serial.println("Turn on ESC");
+  delay(7000);
+  Serial.println("Ready to go");
+}
+
+void initIO() {
+  delay(1000);
+  pinMode(escPin, OUTPUT);
+  pwmThrottle.attach(escPin);
+  pwmThrottle.writeMicroseconds(stop_throt);
+  delay(1000);
 }
 
 void pwm(float normalized_throttle,float normalized_steering){
   // pwm = normalized throttle(-1 to 1) * (pwmMax - pwm min) 
   
-  int throttle_pwm = int(normalized_throttle*(throttle_PWMmax-throttle_PWMmin)/2 + (throttle_PWMmax+throttle_PWMmin)/2);
-  int steering_pwm = int(normalized_steering*(steering_PWMright-steering_PWMleft)/2 + (steering_PWMright+steering_PWMleft)/2);
+  int steering_pwm = mid + normalized_steering * ((right - left) / 2);
+  int throttle_pwm = idle_throt + (normalized_throttle * 500);
+
   Serial.print("steering_pwm=");
   Serial.print(steering_pwm);
   Serial.print(" throttle_pwm=");
   Serial.println(throttle_pwm);
 
-  ledcWrite(throttle_chn, throttle_pwm);
   ledcWrite(steering_chn, steering_pwm);
+
+  pwmThrottle.writeMicroseconds(throttle_pwm);
+
 }
 
 void breakSubRoutine() {
