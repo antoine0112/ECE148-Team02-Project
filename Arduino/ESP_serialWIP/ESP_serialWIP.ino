@@ -1,5 +1,7 @@
 #include <ArduinoJson.h>
 #include <math.h>
+#include <esp_int_wdt.h>
+#include <esp_task_wdt.h>
 
 int mostRecentHrtbt = 0;
 int timeout = 500; // millis
@@ -18,10 +20,12 @@ int throttle_PWMmax = 255;
 int throttle_PWMmin = 0;
 int steering_PWMright = 255;
 int steering_PWMleft = 0;
+int steering_PWMiddle = (steering_PWMright - steering_PWMleft) / 2;
 
 void setup() {
   Serial.begin(115200); 
-
+  esp_int_wdt_init();
+  esp_task_wdt_init(3, true);
 //   wait for serial to start up
   while(!Serial) {
   }
@@ -45,19 +49,39 @@ void pwm(float normalized_throttle,float normalized_steering){
   int throttle_pwm = int(normalized_throttle*(throttle_PWMmax-throttle_PWMmin));
   int steering_pwm = int(normalized_steering*(steering_PWMright-steering_PWMleft));
   Serial.print("steering_pwm=");
-   Serial.print(steering_pwm);
-   Serial.print(" throttle_pwm=");
-   Serial.println(throttle_pwm);
+  Serial.print(steering_pwm);
+  Serial.print(" throttle_pwm=");
+  Serial.println(throttle_pwm);
 
   ledcWrite(throttle_chn, throttle_pwm);
   ledcWrite(steering_chn, steering_pwm);
 }
 
+void breakSubRoutine() {
+  Serial.print("Enterning backup routine");
+  while (1) {
+    ledcWrite(throttle_chn, throttle_PWMmin);
+    ledcWrite(steering_chn, steering_PWMiddle);
+  }
+}
+
 void loop() {
   String  payload;
-  while ( !Serial.available()  ){}
-  if ( Serial.available() )
+  esp_task_wdt_add(NULL);
+  unsigned long begin = millis();
+  unsigned long end = millis();
+
+  while ( !Serial.available() && (end - begin < 200)) {
+    end = millis();
+  }
+  if (end - begin >= 200) {
+    breakSubRoutine();
+  }
+  if ( Serial.available() ) {
+    begin = millis();
+    esp_task_wdt_reset();
     payload = Serial.readStringUntil( '\n' );
+  }
   const uint8_t size = JSON_OBJECT_SIZE(1000);
   StaticJsonDocument<size> doc;
   // Serial.print(payload);
