@@ -1,5 +1,6 @@
 #include <ArduinoJson.h>
 #include <math.h>
+#include <esp_int_wdt.h>
 #include <esp_task_wdt.h>
 
 //3 seconds WDT
@@ -22,6 +23,7 @@ int throttle_PWMmax = 255;
 int throttle_PWMmin = 0;
 int steering_PWMright = 255;
 int steering_PWMleft = 0;
+int steering_PWMiddle = (steering_PWMright - steering_PWMleft) / 2;
 
 void setup() {
   Serial.begin(115200); 
@@ -48,23 +50,39 @@ void pwm(float normalized_throttle,float normalized_steering){
   int throttle_pwm = int(normalized_throttle*(throttle_PWMmax-throttle_PWMmin)/2 + (throttle_PWMmax+throttle_PWMmin)/2);
   int steering_pwm = int(normalized_steering*(steering_PWMright-steering_PWMleft)/2 + (steering_PWMright+steering_PWMleft)/2);
   Serial.print("steering_pwm=");
-   Serial.print(steering_pwm);
-   Serial.print(" throttle_pwm=");
-   Serial.println(throttle_pwm);
+  Serial.print(steering_pwm);
+  Serial.print(" throttle_pwm=");
+  Serial.println(throttle_pwm);
 
   ledcWrite(throttle_chn, throttle_pwm);
   ledcWrite(steering_chn, steering_pwm);
 }
 
+void breakSubRoutine() {
+  Serial.print("Enterning backup routine");
+  while (1) {
+    ledcWrite(throttle_chn, throttle_PWMmin);
+    ledcWrite(steering_chn, steering_PWMiddle);
+  }
+}
+
 void loop() {
   String  payload;
+  // esp_task_wdt_add(NULL);
+  unsigned long begin = millis();
+  unsigned long end = millis();
 
-  // do nothing while serial is disconnected
-  while ( !Serial.available()  ){}
-
-  if ( Serial.available() )
-    esp_task_wdt_reset(); // reset watchdog timer if serial is connected
-    payload = Serial.readStringUntil( '\n' ); // read payload from serial
+  while ( !Serial.available() && (end - begin < 200)) {
+    end = millis();
+  }
+  if (end - begin >= 200) {
+    breakSubRoutine();
+  }
+  if ( Serial.available() ) {
+    begin = millis();
+    esp_task_wdt_reset();
+    payload = Serial.readStringUntil( '\n' );
+  }
   const uint8_t size = JSON_OBJECT_SIZE(1000);
   StaticJsonDocument<size> doc;
   // Serial.print(payload);

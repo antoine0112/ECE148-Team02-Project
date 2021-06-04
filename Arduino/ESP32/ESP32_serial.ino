@@ -1,5 +1,6 @@
 #include <ArduinoJson.h>
 #include <math.h>
+#include <esp_system/include/esp_int_wdt.h>
 
 int mostRecentHrtbt = 0;
 int timeout = 500; // millis
@@ -21,7 +22,8 @@ int steering_PWMleft = 0;
 
 void setup() {
   Serial.begin(115200); 
-
+  esp_int_wdt_init(void);
+  esp_task_wdt_init(3, true);
 //   wait for serial to start up
   while(!Serial) {
   }
@@ -55,8 +57,10 @@ void pwm(float normalized_throttle,float normalized_steering){
 
 void loop() {
   String  payload;
+  esp_task_wdt_add(NULL);
   while ( !Serial.available()  ){}
   if ( Serial.available() )
+    esp_task_wdt_reset();
     payload = Serial.readStringUntil( '\n' );
   const uint8_t size = JSON_OBJECT_SIZE(1000);
   StaticJsonDocument<size> doc;
