@@ -10,7 +10,6 @@
 int mostRecentHrtbt = 0;
 int timeout = 500; // millis
 
-//for home testing
 Servo pwmThrottle;
 int servoPin = 0;
 int escPin = 4;
@@ -31,22 +30,26 @@ void setup() {
   initIO(); // Initialize throttle
   Serial.begin(115200); 
   esp_task_wdt_init(WDT_TIMEOUT, true); //enable panic so ESP32 restarts
-  esp_task_wdt_add(NULL); //add current thread to WDT watch
 
 
 // //   wait for serial to start up
-// while(!Serial) {
-// }
+  while(!Serial) {
+  }
+  Serial.print("step1\n");
 
   pinMode(servoPin, OUTPUT);
   ledcSetup(steering_chn, 300, 8);
   ledcAttachPin(servoPin, steering_chn);
   ledcWrite(steering_chn, mid);
+  Serial.print("step2\n");
 
   // Delay to calibrate ESC
   Serial.println("Turn on ESC");
+  Serial.print("step3\n");
   delay(7000);
+  Serial.print("step4\n");
   Serial.println("Ready to go");
+  Serial.print("step5\n");
 }
 
 void initIO() {
@@ -60,8 +63,8 @@ void initIO() {
 void pwm(float normalized_throttle,float normalized_steering){
   // pwm = normalized throttle(-1 to 1) * (pwmMax - pwm min) 
   
-  int steering_pwm = mid + normalized_steering * ((right - left) / 2);
-  int throttle_pwm = idle_throt + (normalized_throttle * 500);
+  int steering_pwm = mid + int(normalized_steering * int((right - left) / 2));
+  int throttle_pwm = idle_throt + int(normalized_throttle * 500);
 
   Serial.print("steering_pwm=");
   Serial.print(steering_pwm);
@@ -84,11 +87,11 @@ void breakSubRoutine() {
 
 void loop() {
   String  payload;
-  // esp_task_wdt_add(NULL);
+  esp_task_wdt_add(NULL);
   unsigned long begin = millis();
   unsigned long end = millis();
 
-  while ( !Serial.available() && (end - begin < 200)) {
+  while ( !Serial.available()) {
     end = millis();
   }
   if (end - begin >= 200) {

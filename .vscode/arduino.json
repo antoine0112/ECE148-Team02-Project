@@ -1,6 +1,6 @@
 {
-    "configuration": "FlashFreq=80,UploadSpeed=921600,DebugLevel=none",
-    "board": "esp32:esp32:esp32doit-devkit-v1",
-    "port": "COM8",
+    "configuration": "FlashFreq=80,PartitionScheme=default,CPUFreq=240,UploadSpeed=921600",
+    "board": "esp32:esp32:lolin32",
+    "port": "COM7",
     "sketch": "Arduino\\ESP_serialWIP\\ESP_serialWIP.ino"
 }
