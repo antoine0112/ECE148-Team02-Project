@@ -10,55 +10,44 @@
 #include <ESP32Servo.h>
 
 // Macros
+#define SERVO_PIN 0
+#define ESC_PIN 4
 #define RED_PIN 15
 #define BLUE_PIN 16
 #define HTTP_PORT 80
+#define TIMEOUT 500
 #define WDT_TIMEOUT 3
+#define STEERING_CHN 3
+#define IDLE_THROT 1500
+#define BRAKE_THROT 1000
+#define MAX_THROT 2000
+#define LEFT_STEER 84
+#define MID_STEER 116
+#define RIGHT_STEER 148
+#define QUEUE_SIZE 10
 
 // WiFi Credentials
 const char *WIFI_SSID = "ESP32";
 const char *WIFI_PASS = "jetsonucsd";
 
-// WIP Variables
-int mostRecentHrtbt = 0;
-int timeout = 500; // millis
-Servo pwmThrottle;
-int servoPin = 0;
-int escPin = 4;
-int steering_chn = 3;
-int idle_throt = 1500;
-int brake_throt = 1000;
-int max_throt = 2000;
-int left = 84;
-int mid = 116;
-int right = 148;
-
 // Button Component
 struct Button {
     uint8_t pin;
     bool    on;
-
-    // Update Button On Status
     void update() {digitalWrite(pin, on ? HIGH : LOW);}
 };
 
-// Button Instances
+// Instances
 Button red_Button = {RED_PIN, false };
 Button blue_Button = {BLUE_PIN, false };
-
-// Server Instances
 AsyncWebServer server(HTTP_PORT);
 AsyncWebSocket ws("/ws");
-
-// Task Handles
+Servo pwmThrottle;
 TaskHandle_t server_Handle;
-TaskHandle_t wip_Handle;
-
-// Queue Handles
+TaskHandle_t pwm_Handle;
 QueueHandle_t server2PWM_Handle;
-int queueSize = 10;
 
-// FiLL In HTML Buttons For New Connections Using Current Button Values
+// FiLL In Buttons For New Users Using Current Values
 String processor(const String &var) {
     String buttons = "";
     if(var == "BUTTONS"){
@@ -76,30 +65,30 @@ void onRootRequest(AsyncWebServerRequest *request) {
 }
 
 // WebSocket Events
-void onEvent(AsyncWebSocket       *server,  //
-             AsyncWebSocketClient *client,  //
-             AwsEventType          type,    // the signature of this function is defined
-             void                 *arg,     // by the `AwsEventHandler` interface
-             uint8_t              *data,    //
-             size_t                len) {   //
+void onEvent(AsyncWebSocket       *server,
+             AsyncWebSocketClient *client,
+             AwsEventType          type,  
+             void                 *arg,   
+             uint8_t              *data,  
+             size_t                len) { 
 
     // Incoming Message
     if(type == WS_EVT_DATA) {
         AwsFrameInfo *info = (AwsFrameInfo*)arg;
-        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+        if(info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
             // Deseralize Message
             const uint8_t size = JSON_OBJECT_SIZE(2);
             StaticJsonDocument<size> json;
             DeserializationError err = deserializeJson(json, data);
-            if(err){return;}
+            if(err){ return;}
             
             // Update Red Button
-            if (strcmp(json["Button"], "red_Button") == 0) {
+            if(strcmp(json["Button"], "red_Button") == 0) {
                 red_Button.on = !red_Button.on;
                 json["status"] = red_Button.on? "on": "off";
             } 
             // Update blue Button
-            else if (strcmp(json["Button"], "blue_Button") == 0) {
+            else if(strcmp(json["Button"], "blue_Button") == 0) {
                 blue_Button.on = !blue_Button.on;
                 json["status"] = blue_Button.on? "on": "off";
             }
@@ -134,13 +123,13 @@ void serverSetup() {
     server.on("/", onRootRequest);
     server.serveStatic("/", SPIFFS, "/");
     server.begin();
+    Serial.println("\nServer Ready to go");
 }
 
 // Server Loop
 void serverTasks(void* param) {
     Serial.print("serverTasks running on core ");
     Serial.println(xPortGetCoreID());
-    
     while (true)
     {   // Update Buttons
         red_Button.update();
@@ -151,97 +140,69 @@ void serverTasks(void* param) {
     }
 }
 
-void initIO() {
-  delay(1000);
-  pinMode(escPin, OUTPUT);
-  pwmThrottle.attach(escPin);
-  pwmThrottle.writeMicroseconds(idle_throt);
-  delay(1000);
-}
-
-void wipSetup() {
-    initIO(); // Initialize throttle
-    Serial.begin(115200); 
-    esp_task_wdt_init(WDT_TIMEOUT, false); //enable panic so ESP32 restarts
-
-    // wait for serial to start up
-    while(!Serial) {
-    }
-    Serial.print("step1\n");
-
-    pinMode(servoPin, OUTPUT);
-    ledcSetup(steering_chn, 300, 8);
-    ledcAttachPin(servoPin, steering_chn);
-    ledcWrite(steering_chn, mid);
-    Serial.print("step2\n");
-
+// PWM Initialization
+void pwmSetup() {
+    // Initialize throttle
+    pinMode(ESC_PIN, OUTPUT);
+    pwmThrottle.attach(ESC_PIN);
+    pwmThrottle.writeMicroseconds(IDLE_THROT);
+    
+    // Initialize steering
+    pinMode(SERVO_PIN, OUTPUT);
+    ledcSetup(STEERING_CHN, 300, 8);
+    ledcAttachPin(SERVO_PIN, STEERING_CHN);
+    ledcWrite(STEERING_CHN, MID_STEER);
+    
+    //enable panic so ESP32 restarts
+    esp_task_wdt_init(WDT_TIMEOUT, false); 
+    
     // Delay to calibrate ESC
-    Serial.println("Turn on ESC");
-    Serial.print("step3\n");
     delay(7000);
-    Serial.print("step4\n");
-    Serial.println("Ready to go");
-    Serial.print("step5\n");
+    Serial.println("PWM Ready to go");
 }
 
-void pwm(float normalized_throttle,float normalized_steering){
-    // pwm = normalized throttle(-1 to 1) * (pwmMax - pwm min) 
-    int steering_pwm = mid + int(normalized_steering * int((right - left) / 2));
-    int throttle_pwm = idle_throt + int(normalized_throttle * 500);
-
-    Serial.print("steering_pwm=");
-    Serial.print(steering_pwm);
-    Serial.print(" throttle_pwm=");
-    Serial.println(throttle_pwm);
-
-    ledcWrite(steering_chn, steering_pwm);
-
-    pwmThrottle.writeMicroseconds(throttle_pwm);
-}
-
-void breakSubRoutine() {
-    Serial.print("Enterning backup routine");
-    while (1) {
-        pwmThrottle.writeMicroseconds(idle_throt);
-        ledcWrite(steering_chn, mid);
-    }
-}
-
-// WIP Loop
-void wipTasks(void* param) {
-    Serial.print("wipTasks running on core ");
+// PWM Loop
+void pwmTasks(void* param) {
+    Serial.print("pwmTasks running on core ");
     Serial.println(xPortGetCoreID());
-
-    while (true)
-    {   String  payload;
-        esp_task_wdt_add(NULL);
+    while(true)
+    {   esp_task_wdt_add(NULL);
+        
+        // Serial Check
         unsigned long begin = millis();
         unsigned long end = millis();
-
-        while(!Serial.available()) {
-            end = millis();
-        }
+        while(!Serial.available()) {end = millis();}
         if(end-begin >= 200) {
-            breakSubRoutine();
+            Serial.print("Enterning backup routine");
+            while(1) {
+                pwmThrottle.writeMicroseconds(IDLE_THROT);
+                ledcWrite(STEERING_CHN, MID_STEER);
+            }
         }
+        
+        // Get Message
+        String payload;
         if(Serial.available()) {
             begin = millis();
             esp_task_wdt_reset();
             payload = Serial.readStringUntil( '\n' );
         }
+        
+        // Deserialize Message
         const uint8_t size = JSON_OBJECT_SIZE(1000);
         StaticJsonDocument<size> doc;
-        // Serial.print(payload);
-
         DeserializationError error = deserializeJson(doc, payload);
-        if(error) {
-            Serial.println(error.c_str()); 
-            return;
-        };
+        if(error) {return;};
+        
+        // Calculate Steering and Throttle
         float normalized_throttle = doc["throttle"];
         float normalized_steering = doc["steering"];
-        pwm(normalized_throttle,normalized_steering);
-        delay(10);
+        int steering_pwm = MID_STEER+int(normalized_steering*int((RIGHT_STEER-LEFT_STEER)/2));
+        int throttle_pwm = IDLE_THROT+int(normalized_throttle*500);
+        ledcWrite(STEERING_CHN, steering_pwm);
+        pwmThrottle.writeMicroseconds(throttle_pwm);
+        Serial.print("steering_pwm="+steering_pwm);
+        Serial.print(" throttle_pwm="+throttle_pwm);
     }
 }
 
@@ -252,13 +213,13 @@ void setup()
     xTaskCreatePinnedToCore(serverTasks, "ServerTasks", 10000, NULL, 1, &server_Handle, 0);
     delay(500); 
     
-    // Start WIP
-    wipSetup();
-    xTaskCreatePinnedToCore(wipTasks, "WIPTasks", 10000, NULL, 1, &wip_Handle, 1);
+    // Start PWM
+    pwmSetup();
+    xTaskCreatePinnedToCore(pwmTasks, "pwmTasks", 10000, NULL, 1, &pwm_Handle, 1);
     delay(500);
     
     // Create Server to PWM Queue
-    server2PWM_Handle = xQueueCreate(queueSize, sizeof(int));
+    server2PWM_Handle = xQueueCreate(QUEUE_SIZE, sizeof(int));
 }
 
 // Main Loop
