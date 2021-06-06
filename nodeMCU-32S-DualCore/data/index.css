@@ -1,0 +1,67 @@
+@charset "UTF-8";
+@import url("https://fonts.googleapis.com/css2?family=Roboto&display=swap");
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: Roboto, sans-serif;
+  font-size: 12pt;
+  overflow: hidden;
+}
+
+body {
+  display: grid;
+  grid-template-rows: 1fr;
+  align-items: center;
+  justify-items: center;
+}
+
+.panel {
+  display: grid;
+  grid-gap: 3em;
+  justify-items: center;
+}
+
+h1 {
+  font-size: 1.5rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+button {
+  position: relative;
+  width: 6em;
+  height: 6em;
+  border: 2px solid #000;
+  border-radius: 3em;
+}
+button:after {
+  content: '';
+  position: absolute;
+  top: .3em;
+  left: 1em;
+  width: 60%;
+  height: 40%;
+  border-radius: 60%;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+}
+#red_Button {
+  background-image: radial-gradient(farthest-corner at 50% 20%, #b30000 0%, #330000 100%);
+  box-shadow: 0 0.5em 1em rgba(102, 0, 0, 0.3);
+}
+#red_Button.on {
+  background-image: radial-gradient(farthest-corner at 50% 75%, red 0%, #990000 100%);
+  box-shadow: 0 1em 1.5em rgba(255, 0, 0, 0.5);
+}
+#blue_Button {
+  background-image: radial-gradient(farthest-corner at 50% 20%, #0c00b3 0%, #030033 100%);
+  box-shadow: 0 0.5em 1em rgba(7, 0, 102, 0.3);
+}
+#blue_Button.on {
+  background-image: radial-gradient(farthest-corner at 50% 75%, rgb(25, 0, 255) 0%, #0f0099 100%);
+  box-shadow: 0 1em 1.5em rgba(17, 0, 255, 0.5);
+}
