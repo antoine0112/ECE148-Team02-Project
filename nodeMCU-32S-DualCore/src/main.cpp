@@ -27,7 +27,7 @@
 #define QUEUE_SIZE 10
 
 // WiFi Credentials
-const char *WIFI_SSID = "ESP32";
+const char *WIFI_SSID = "ESP32BIS";
 const char *WIFI_PASS = "jetsonucsd";
 
 // Button Component
@@ -107,7 +107,7 @@ void serverSetup() {
     pinMode(blue_Button.pin, OUTPUT);
     
     // Activate Serial Monitor 
-    Serial.begin(115200); delay(500);
+    delay(500);
   
     // Start SPIFFS
     SPIFFS.begin();
@@ -132,11 +132,13 @@ void serverTasks(void* param) {
     Serial.println(xPortGetCoreID());
     while (true)
     {   // Update Buttons
+
         red_Button.update();
         blue_Button.update();
 
         // Close Lingering WebSockets
         if(millis()%1000 == 0){ ws.cleanupClients();}
+        delay(100);
     }
 }
 
@@ -154,7 +156,7 @@ void pwmSetup() {
     ledcWrite(STEERING_CHN, MID_STEER);
     
     //enable panic so ESP32 restarts
-    esp_task_wdt_init(WDT_TIMEOUT, false); 
+    esp_task_wdt_init(WDT_TIMEOUT, true); 
     
     // Delay to calibrate ESC
     delay(7000);
@@ -165,18 +167,20 @@ void pwmSetup() {
 void pwmTasks(void* param) {
     Serial.print("pwmTasks running on core ");
     Serial.println(xPortGetCoreID());
+    unsigned long begin = millis();
+    unsigned long end = millis();
+    esp_task_wdt_add(NULL);
     while(true)
-    {   esp_task_wdt_add(NULL);
-        
+    {    
+        delay(100);
         // Serial Check
-        unsigned long begin = millis();
-        unsigned long end = millis();
-        while(!Serial.available()) {end = millis();}
+        while(!Serial.available() && (end-begin) < 200) {end = millis();}
         if(end-begin >= 200) {
-            Serial.print("Enterning backup routine");
+            Serial.println("Enterning backup routine");
             while(1) {
                 pwmThrottle.writeMicroseconds(IDLE_THROT);
                 ledcWrite(STEERING_CHN, MID_STEER);
+                delay(100);
             }
         }
         
@@ -184,10 +188,11 @@ void pwmTasks(void* param) {
         String payload;
         if(Serial.available()) {
             begin = millis();
+            end = millis();
             esp_task_wdt_reset();
             payload = Serial.readStringUntil( '\n' );
         }
-        
+  
         // Deserialize Message
         const uint8_t size = JSON_OBJECT_SIZE(1000);
         StaticJsonDocument<size> doc;
@@ -201,24 +206,28 @@ void pwmTasks(void* param) {
         int throttle_pwm = IDLE_THROT+int(normalized_throttle*500);
         ledcWrite(STEERING_CHN, steering_pwm);
         pwmThrottle.writeMicroseconds(throttle_pwm);
-        Serial.print("steering_pwm="+steering_pwm);
-        Serial.print(" throttle_pwm="+throttle_pwm);
+        Serial.println("steering_pwm="+steering_pwm);
+        Serial.println(" throttle_pwm="+throttle_pwm);
     }
 }
 
 // Set Up
 void setup()
 {   // Start Server
-    serverSetup();
-    xTaskCreatePinnedToCore(serverTasks, "ServerTasks", 10000, NULL, 1, &server_Handle, 0);
-    delay(500); 
     
     // Start PWM
-    pwmSetup();
-    xTaskCreatePinnedToCore(pwmTasks, "pwmTasks", 10000, NULL, 1, &pwm_Handle, 1);
-    delay(500);
     
     // Create Server to PWM Queue
+    Serial.begin(115200);
+    Serial.print("setup running on core ");
+    Serial.println(xPortGetCoreID());
+
+    serverSetup();
+    pwmSetup();
+    xTaskCreatePinnedToCore(serverTasks, "ServerTasks", 10000, NULL, 1, &server_Handle, 0);
+    delay(500); 
+    xTaskCreatePinnedToCore(pwmTasks, "pwmTasks", 10000, NULL, 1, &pwm_Handle, 1);
+    delay(500);
     server2PWM_Handle = xQueueCreate(QUEUE_SIZE, sizeof(int));
 }
 
