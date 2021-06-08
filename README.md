@@ -3,6 +3,9 @@
 
 As part of ECE/MAE148, Team02 developed an ESP32 vehicle control system, with robust emergency stop features and an expandable webserver-based remote control.
 Based on the DonkeyCar's electrical framework, the use of an ESP32 replaces the PCA9685 motor driver, as well as the remote Estop relay board. 
+
+Details about the project can be found here: https://guitar.ucsd.edu/maeece148/index.php/2021SpringTeam2
+
 Usage of the ESP32 provides multiple benefits:
 
 - Using a standard USB cable to both power and communicate with serial between the Jetson and ESP32 simplifies wiring. 
