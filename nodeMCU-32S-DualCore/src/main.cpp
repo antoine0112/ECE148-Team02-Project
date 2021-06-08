@@ -27,7 +27,7 @@
 #define QUEUE_SIZE 10
 
 // WiFi Credentials
-const char *WIFI_SSID = "ESP32BIS";
+const char *WIFI_SSID = "ESP32Test";
 const char *WIFI_PASS = "jetsonucsd";
 
 // Button Component
@@ -45,7 +45,8 @@ AsyncWebSocket ws("/ws");
 Servo pwmThrottle;
 TaskHandle_t server_Handle;
 TaskHandle_t pwm_Handle;
-QueueHandle_t server2PWM_Handle;
+QueueHandle_t server2PWM_QueueHandle;
+QueueHandle_t server2Status_QueueHandle;
 
 // FiLL In Buttons For New Users Using Current Values
 String processor(const String &var) {
@@ -86,6 +87,7 @@ void onEvent(AsyncWebSocket       *server,
             if(strcmp(json["Button"], "red_Button") == 0) {
                 red_Button.on = !red_Button.on;
                 json["status"] = red_Button.on? "on": "off";
+                xQueueSend(server2PWM_QueueHandle, &(red_Button.on), 0);
             } 
             // Update blue Button
             else if(strcmp(json["Button"], "blue_Button") == 0) {
@@ -130,15 +132,26 @@ void serverSetup() {
 void serverTasks(void* param) {
     Serial.print("serverTasks running on core ");
     Serial.println(xPortGetCoreID());
+    int status = 0;
+    int i = 0;
     while (true)
     {   // Update Buttons
+        if (xQueueReceive(server2Status_QueueHandle, &i, 0) == pdTRUE) {
+            const uint8_t size = JSON_OBJECT_SIZE(2);
+            StaticJsonDocument<size> json;
+            json["Button"] = "None";
+            json["status"] = i;
+            char syncData[40];
+            ws.textAll(syncData, serializeJson(json, syncData));
+        }
+
 
         red_Button.update();
         blue_Button.update();
 
         // Close Lingering WebSockets
         if(millis()%1000 == 0){ ws.cleanupClients();}
-        delay(100);
+        delay(400);
     }
 }
 
@@ -165,15 +178,34 @@ void pwmSetup() {
 
 // PWM Loop
 void pwmTasks(void* param) {
+    bool killed;
     Serial.print("pwmTasks running on core ");
     Serial.println(xPortGetCoreID());
     unsigned long begin = millis();
     unsigned long end = millis();
     esp_task_wdt_add(NULL);
+    bool i = false;
     while(true)
     {    
+        Serial.print("red button: ");
+        //Serial.println(red_Button.on);
         delay(100);
         // Serial Check
+    
+        if (!server2PWM_QueueHandle) {
+            Serial.println("QUEUE NOT SET");
+        }
+        if (xQueueReceive(server2PWM_QueueHandle, &i, 0) == pdTRUE) {
+            Serial.print("BUTTON == ");
+            Serial.println(i);
+            if (i) {
+                killed = true;
+            } else {
+                killed = false;
+            }
+            Serial.print("killed == ");
+            Serial.println(killed);
+        }
         while(!Serial.available() && (end-begin) < 200) {end = millis();}
         if(end-begin >= 200) {
             Serial.println("Enterning backup routine");
@@ -197,17 +229,20 @@ void pwmTasks(void* param) {
         const uint8_t size = JSON_OBJECT_SIZE(1000);
         StaticJsonDocument<size> doc;
         DeserializationError error = deserializeJson(doc, payload);
-        if(error) {return;};
-        
-        // Calculate Steering and Throttle
-        float normalized_throttle = doc["throttle"];
-        float normalized_steering = doc["steering"];
-        int steering_pwm = MID_STEER+int(normalized_steering*int((RIGHT_STEER-LEFT_STEER)/2));
-        int throttle_pwm = IDLE_THROT+int(normalized_throttle*500);
-        ledcWrite(STEERING_CHN, steering_pwm);
-        pwmThrottle.writeMicroseconds(throttle_pwm);
-        Serial.println("steering_pwm="+steering_pwm);
-        Serial.println(" throttle_pwm="+throttle_pwm);
+        if (error) {    
+        } else {
+            // Calculate Steering and Throttle
+            float normalized_throttle = doc["throttle"];
+            float normalized_steering = doc["steering"];
+            int steering_pwm = !i? MID_STEER+int(normalized_steering*int((RIGHT_STEER-LEFT_STEER)/2)): MID_STEER;
+            int throttle_pwm = !i? IDLE_THROT+int(normalized_throttle*500): IDLE_THROT;
+            ledcWrite(STEERING_CHN, steering_pwm);
+            pwmThrottle.writeMicroseconds(throttle_pwm);
+            Serial.print("steering_pwm=");
+            Serial.print(steering_pwm);
+            Serial.print(" throttle_pwm=");
+            Serial.println(throttle_pwm);
+        };
     }
 }
 
@@ -221,14 +256,18 @@ void setup()
     Serial.begin(115200);
     Serial.print("setup running on core ");
     Serial.println(xPortGetCoreID());
+    server2PWM_QueueHandle = xQueueCreate(QUEUE_SIZE, sizeof(bool));
+    server2Status_QueueHandle = xQueueCreate(QUEUE_SIZE, sizeof(int));
+    if (!server2PWM_QueueHandle) {
+        Serial.println("QUEUE NOT SET");
+    }
 
     serverSetup();
     pwmSetup();
-    xTaskCreatePinnedToCore(serverTasks, "ServerTasks", 10000, NULL, 1, &server_Handle, 0);
+    xTaskCreatePinnedToCore(serverTasks, "ServerTasks", 10000, NULL, 2, &server_Handle, 0);
     delay(500); 
     xTaskCreatePinnedToCore(pwmTasks, "pwmTasks", 10000, NULL, 1, &pwm_Handle, 1);
     delay(500);
-    server2PWM_Handle = xQueueCreate(QUEUE_SIZE, sizeof(int));
 }
 
 // Main Loop

@@ -30,7 +30,9 @@ function onMessage(event) {
     } 
     else if(data.Button=="blue_Button"){
         document.getElementById('blue_Button').className = data.status;
-    }    
+    } else if (data.Button=="None") {
+        document.getElementById('status').value = data;
+    }
 }
 
 // Button Handling
